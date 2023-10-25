@@ -10,11 +10,12 @@ const modalElem = document.querySelector('#modalElem')
 const bigScoreElem = document.querySelector('#bigScoreElem')
 
 class Player {
-    constructor(x, y, radius, color) {
+    constructor(x, y, radius, color, velocity) {
         this.x = x
         this.y = y
         this.radius = radius
         this.color = color
+        this.velocity = velocity
     }
 
     draw() {
@@ -22,6 +23,12 @@ class Player {
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false)
         ctx.fillStyle = this.color
         ctx.fill()
+    }
+
+    update() {
+        this.draw()
+        this.x += this.velocity.x
+        this.y += this.velocity.y
     }
 }
 
@@ -104,13 +111,38 @@ class Particle {
 const x = canvas.width / 2
 const y = canvas.height / 2
 
-let player = new Player(x, y, 10, 'white')
+let player
 let projectiles = []
 let enemies = []
 let particles = []
 
+const keys = {
+    a: false,
+    d: false,
+    s: false,
+    w: false
+}
+
+window.addEventListener('keydown', (e) => {
+    switch (e.code) {
+        case 'KeyA': keys.a = true; break
+        case 'KeyD': keys.d = true; break
+        case 'KeyS': keys.s = true; break
+        case 'KeyW': keys.w = true; break
+    }
+})
+
+window.addEventListener('keyup', (e) => {
+    switch (e.code) {
+        case 'KeyA': keys.a = false; break
+        case 'KeyD': keys.d = false; break
+        case 'KeyS': keys.s = false; break
+        case 'KeyW': keys.w = false; break
+    }
+})
+
 function init() {
-    player = new Player(x, y, 10, 'white')
+    player = new Player(x, y, 10, 'white', {x: 0, y: 0})
     projectiles = []
     enemies = []
     particles = []
@@ -134,7 +166,7 @@ function spawnEnemies() {
 
         const color = `hsl(${Math.random() * 360}, 50%, 50%)`
 
-        const angle = Math.atan2(canvas.height / 2 - y, canvas.width / 2 - x)
+        const angle = Math.atan2(player.y - y, player.x - x)
 
         const velocity = {
             x: Math.cos(angle),
@@ -145,13 +177,47 @@ function spawnEnemies() {
     }, 1000)
 }
 
+const yCnt = 30
+const starDist = canvas.height / yCnt
+const xCnt = Math.floor(canvas.width / starDist) + 1
+const alpha0 = 50
+const alpha1 = 300
+const alphaMax = 0.8
+function drawStars() {
+    for (let i = 0; i < xCnt; i++) {
+        for (let j = 0; j < yCnt; j++) {
+            const starX = i * starDist
+            const starY = j * starDist
+            const dist = Math.abs(Math.hypot(player.x - starX, player.y - starY) - player.radius)
+            let alpha = 0
+            if (dist >= alpha1) alpha = alphaMax
+            else if (dist > alpha0 && dist < alpha1) alpha = alphaMax * (dist - alpha0) / (alpha1 - alpha0)
+            ctx.save()
+            ctx.beginPath()
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`
+            ctx.arc(starX, starY, 1, 0, Math.PI * 2, false)
+            ctx.fill()
+            ctx.closePath()
+            ctx.restore()
+        }
+    }
+}
+
 let animationId
 let score = 0
+let playerSpeed = 1.5
 function animate() {
     animationId = requestAnimationFrame(animate)
     ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
-    player.draw()
+    player.velocity.x = 0
+    player.velocity.y = 0
+    if (keys.a) player.velocity.x = -playerSpeed
+    else if (keys.d) player.velocity.x = playerSpeed
+    if (keys.s) player.velocity.y = playerSpeed
+    else if (keys.w) player.velocity.y = -playerSpeed
+    player.update()
+    drawStars()
     particles.forEach((particle, index) => {
         if (particle.alpha <= 0) {
             particles.splice(index, 1)
@@ -173,6 +239,12 @@ function animate() {
         }
     })
     enemies.forEach((enemy, index) => {
+        const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x)
+
+        enemy.velocity = {
+            x: Math.cos(angle),
+            y: Math.sin(angle)
+        }
         enemy.update()
 
         const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
@@ -222,11 +294,11 @@ function animate() {
     })
 }
 
-addEventListener('click', (event) => {
+window.addEventListener('click', (event) => {
     {
         const angle = Math.atan2(
-            event.clientY - canvas.height / 2,
-            event.clientX - canvas.width / 2
+            event.clientY - player.y,
+            event.clientX - player.x
         )
 
         const velocity = {
